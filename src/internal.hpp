@@ -79,9 +79,9 @@ class TrampHook
     void Enable();
     void Disable();
     bool IsEnabled();
-    void* GetTarget();
+    void* GetGateway();
 
   private:
     void* gateway;
-    std::shared_ptr<Hook> managedHook;
+    std::unique_ptr<Hook> managedHook;
 };

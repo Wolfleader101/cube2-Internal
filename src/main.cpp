@@ -382,11 +382,11 @@ static void triggerBot()
     }
 }
 
-static BOOL _stdcall hwglSwapBuffers(HDC hDc)
+BOOL _stdcall hwglSwapBuffers(HDC hDc)
 {
     std::cout << "Swap Buffers" << std::endl;
 
-    return ((twglSwapBuffers)espHook->GetTarget())(hDc);
+    return ((twglSwapBuffers)espHook->GetGateway())(hDc);
 }
 
 DWORD WINAPI InternalMain(HMODULE hModule)
@@ -410,10 +410,10 @@ DWORD WINAPI InternalMain(HMODULE hModule)
 
     std::thread triggerBotThread(triggerBot);
 
-    std::cout << "Module Base: L" << std::hex << moduleBase << std::endl;
-    std::cout << "Player Offset: L" << std::hex << playerOffset << std::endl;
-    std::cout << "Player Address: L" << std::hex << player << std::endl;
-    std::cout << "Player name: L" << player->name << std::endl;
+    std::cout << "Module Base: " << std::hex << moduleBase << std::endl;
+    std::cout << "Player Offset: " << std::hex << playerOffset << std::endl;
+    std::cout << "Player Address: " << std::hex << player << std::endl;
+    std::cout << "Player name: " << player->name << std::endl;
 
     freezeAmmo = std::make_shared<NopInternal>((BYTE*)(moduleBase + 0x1DB5E0), 8);
     rapidFire = std::make_shared<NopInternal>((BYTE*)(moduleBase + 0x1DBA02), 7);
@@ -422,26 +422,34 @@ DWORD WINAPI InternalMain(HMODULE hModule)
     BYTE noRecoilByteCode[] = "\x0F\x57\xC0\x90\x90\x90\x90\x90";
     noRecoilPatch = std::make_shared<ManagedPatch>((BYTE*)(moduleBase + 0x1DB73E), noRecoilByteCode, 8);
 
-    std::cout << "Getting opengl32.dll..." << std::endl;
-
-    HMODULE hOpenGL32 = GetModuleHandleA("OPENGL32.dll");
+    HMODULE hOpenGL32 = GetModuleHandleA("opengl32.dll");
     if (!hOpenGL32)
     {
         std::cerr << "Failed to get opengl32.dll" << std::endl;
         return -1;
     }
 
-    std::cout << "Getting wglSwapBuffers..." << std::endl;
-    void* wglSwapBuffers = GetProcAddress(hOpenGL32, "wglSwapBuffers");
+    void* wglSwapBuffersAddr = GetProcAddress(hOpenGL32, "wglSwapBuffers");
+    std::cout << "wglSwapBuffers: L" << std::hex << wglSwapBuffersAddr << std::endl;
 
-    if (!wglSwapBuffers)
+    if (!wglSwapBuffersAddr)
     {
         std::cerr << "Failed to get wglSwapBuffers" << std::endl;
         return -1;
     }
 
-    std::cout << "Creating hook..." << std::endl;
-    espHook = std::make_shared<TrampHook>(wglSwapBuffers, hwglSwapBuffers, 5);
+    espHook = std::make_shared<TrampHook>(wglSwapBuffersAddr, hwglSwapBuffers, 16);
+
+    std::cout << "Made ESP Hook" << std::endl;
+
+    while (!GetAsyncKeyState(VK_END))
+    {
+        if (GetAsyncKeyState(VK_F2) & 1)
+        { // toggle Esp
+            espHook->IsEnabled() ? espHook->Disable() : espHook->Enable();
+        }
+        Sleep(50);
+    }
 
     HINSTANCE hInstance = GetModuleHandle(0);
     WNDCLASSEX wc{};
