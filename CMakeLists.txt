@@ -24,7 +24,7 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     add_compile_options(/W4)
 endif()
 
-# add_definitions(-D_UNICODE -DUNICODE) # Use Unicode
+add_definitions(-D_UNICODE -DUNICODE) # Use Unicode
 
 file(GLOB SRC src/*.cpp)
 include_directories(src/)
