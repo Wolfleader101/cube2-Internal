@@ -9,7 +9,7 @@
 
 inline uintptr_t GetModuleBaseAddress(const wchar_t* modName)
 {
-    return (uintptr_t)GetModuleHandle(modName);
+    return (uintptr_t)GetModuleHandleW(modName);
 }
 
 inline uintptr_t GetModuleBaseAddress(const char* modName)
