@@ -9,6 +9,8 @@
 #include "internal.hpp"
 #include "player.h"
 
+typedef BOOL(__stdcall* twglSwapBuffers)(HDC hDc);
+
 constexpr int SELECT_CHAINSAW = WM_APP + 100;
 constexpr int SELECT_SHOTGUN = WM_APP + 101;
 constexpr int SELECT_MACHINEGUN = WM_APP + 102;
@@ -52,6 +54,7 @@ static std::shared_ptr<NopInternal> freezeAmmo = nullptr;
 static std::shared_ptr<NopInternal> godMode = nullptr;
 static std::shared_ptr<NopInternal> rapidFire = nullptr;
 static std::shared_ptr<ManagedPatch> noRecoilPatch = nullptr;
+static std::shared_ptr<TrampHook> espHook = nullptr;
 
 static HWND hEditChainsawAmmo;
 static HWND hEditShotgunAmmo;
@@ -88,29 +91,29 @@ static void selectWeapon(int weapon)
 
 static void updateAmmoValues()
 {
-    SetWindowText(hEditChainsawAmmo, std::to_string(player->chainSaw).c_str());
+    SetWindowText(hEditChainsawAmmo, std::to_wstring(player->chainSaw).c_str());
 
-    SetWindowText(hEditShotgunAmmo, std::to_string(player->shotgunAmmo).c_str());
+    SetWindowText(hEditShotgunAmmo, std::to_wstring(player->shotgunAmmo).c_str());
 
-    SetWindowText(hEditMachinegunAmmo, std::to_string(player->machineAmmo).c_str());
+    SetWindowText(hEditMachinegunAmmo, std::to_wstring(player->machineAmmo).c_str());
 
-    SetWindowText(hEditRocketlauncherAmmo, std::to_string(player->rocketAmmo).c_str());
+    SetWindowText(hEditRocketlauncherAmmo, std::to_wstring(player->rocketAmmo).c_str());
 
-    SetWindowText(hEditRifleAmmo, std::to_string(player->rifleAmmo).c_str());
+    SetWindowText(hEditRifleAmmo, std::to_wstring(player->rifleAmmo).c_str());
 
-    SetWindowText(hEditGrenadelauncherAmmo, std::to_string(player->grenadeAmmo).c_str());
+    SetWindowText(hEditGrenadelauncherAmmo, std::to_wstring(player->grenadeAmmo).c_str());
 
-    SetWindowText(hEditPistolAmmo, std::to_string(player->pistolAmmo).c_str());
+    SetWindowText(hEditPistolAmmo, std::to_wstring(player->pistolAmmo).c_str());
 
-    SetWindowText(hEditFireballAmmo, std::to_string(player->fireBallAmmo).c_str());
+    SetWindowText(hEditFireballAmmo, std::to_wstring(player->fireBallAmmo).c_str());
 
-    SetWindowText(hEditIceballAmmo, std::to_string(player->iceAmmo).c_str());
+    SetWindowText(hEditIceballAmmo, std::to_wstring(player->iceAmmo).c_str());
 
-    SetWindowText(hEditLaserAmmo, std::to_string(player->laserAmmo).c_str());
+    SetWindowText(hEditLaserAmmo, std::to_wstring(player->laserAmmo).c_str());
 
-    SetWindowText(hEditBiteAmmo, std::to_string(player->BiteAmmo).c_str());
+    SetWindowText(hEditBiteAmmo, std::to_wstring(player->BiteAmmo).c_str());
 
-    SetWindowText(hEditNosoundAmmo, std::to_string(player->skullAmmo).c_str());
+    SetWindowText(hEditNosoundAmmo, std::to_wstring(player->skullAmmo).c_str());
 }
 
 static LRESULT CALLBACK MessageHandler(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -167,7 +170,7 @@ static LRESULT CALLBACK MessageHandler(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
             else
                 freezeAmmo->Disable();
 
-            SetWindowText(hFreezeAmmoBtn, isAmmoFrozen ? "Unfreeze Ammo" : "Freeze Ammo");
+            SetWindowText(hFreezeAmmoBtn, isAmmoFrozen ? L"Unfreeze Ammo" : L"Freeze Ammo");
             break;
         case GOD_MODE:
             isGodModeEnabled = !isGodModeEnabled;
@@ -176,7 +179,7 @@ static LRESULT CALLBACK MessageHandler(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
             else
                 godMode->Disable();
 
-            SetWindowText(hGodModeBtn, isGodModeEnabled ? TEXT("Disable God Mode") : "Enable God Mode");
+            SetWindowText(hGodModeBtn, isGodModeEnabled ? L"Disable God Mode" : L"Enable God Mode");
             break;
         case RAPID_FIRE:
             isRapidFireEnabled = !isRapidFireEnabled;
@@ -185,15 +188,15 @@ static LRESULT CALLBACK MessageHandler(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
             else
                 rapidFire->Disable();
 
-            SetWindowText(hRapidFireBtn, isRapidFireEnabled ? "Disable Rapid Fire" : "Enable Rapid Fire");
+            SetWindowText(hRapidFireBtn, isRapidFireEnabled ? L"Disable Rapid Fire" : L"Enable Rapid Fire");
             break;
         case TRIGGER_BOT:
             isTriggerBotEnabled = !isTriggerBotEnabled;
-            SetWindowText(hTriggerBotBtn, isTriggerBotEnabled ? "Disable Trigger Bot" : "Enable Trigger Bot");
+            SetWindowText(hTriggerBotBtn, isTriggerBotEnabled ? L"Disable Trigger Bot" : L"Enable Trigger Bot");
             break;
         case NO_RECOIL:
             isNoRecoilEnabled = !isNoRecoilEnabled;
-            SetWindowText(hNoRecoilBtn, isNoRecoilEnabled ? "Disable No Recoil" : "Enable No Recoil");
+            SetWindowText(hNoRecoilBtn, isNoRecoilEnabled ? L"Disable No Recoil" : L"Enable No Recoil");
             if (isNoRecoilEnabled)
                 noRecoilPatch->Enable();
             else
@@ -367,7 +370,6 @@ static void triggerBot()
 
             if (hitEnt)
             {
-                std::cout << "YEAH, we killed it!" << std::endl;
                 hitEnt->hp = 1;
                 player->isShooting = 1;
             }
@@ -380,9 +382,15 @@ static void triggerBot()
     }
 }
 
+static BOOL _stdcall hwglSwapBuffers(HDC hDc)
+{
+    std::cout << "Swap Buffers" << std::endl;
+
+    return ((twglSwapBuffers)espHook->GetTarget())(hDc);
+}
+
 DWORD WINAPI InternalMain(HMODULE hModule)
 {
-
     AllocConsole();
     FILE* fDummy;
     freopen_s(&fDummy, "CONOUT$", "w", stdout);
@@ -402,9 +410,10 @@ DWORD WINAPI InternalMain(HMODULE hModule)
 
     std::thread triggerBotThread(triggerBot);
 
-    std::cout << "Module Base: " << std::hex << moduleBase << std::endl;
-    std::cout << "Player Offset: " << std::hex << playerOffset << std::endl;
-    std::cout << "Player Address: " << std::hex << player << std::endl;
+    std::cout << "Module Base: L" << std::hex << moduleBase << std::endl;
+    std::cout << "Player Offset: L" << std::hex << playerOffset << std::endl;
+    std::cout << "Player Address: L" << std::hex << player << std::endl;
+    std::cout << "Player name: L" << player->name << std::endl;
 
     freezeAmmo = std::make_shared<NopInternal>((BYTE*)(moduleBase + 0x1DB5E0), 8);
     rapidFire = std::make_shared<NopInternal>((BYTE*)(moduleBase + 0x1DBA02), 7);
@@ -413,6 +422,27 @@ DWORD WINAPI InternalMain(HMODULE hModule)
     BYTE noRecoilByteCode[] = "\x0F\x57\xC0\x90\x90\x90\x90\x90";
     noRecoilPatch = std::make_shared<ManagedPatch>((BYTE*)(moduleBase + 0x1DB73E), noRecoilByteCode, 8);
 
+    std::cout << "Getting opengl32.dll..." << std::endl;
+
+    HMODULE hOpenGL32 = GetModuleHandleA("OPENGL32.dll");
+    if (!hOpenGL32)
+    {
+        std::cerr << "Failed to get opengl32.dll" << std::endl;
+        return -1;
+    }
+
+    std::cout << "Getting wglSwapBuffers..." << std::endl;
+    void* wglSwapBuffers = GetProcAddress(hOpenGL32, "wglSwapBuffers");
+
+    if (!wglSwapBuffers)
+    {
+        std::cerr << "Failed to get wglSwapBuffers" << std::endl;
+        return -1;
+    }
+
+    std::cout << "Creating hook..." << std::endl;
+    espHook = std::make_shared<TrampHook>(wglSwapBuffers, hwglSwapBuffers, 5);
+
     HINSTANCE hInstance = GetModuleHandle(0);
     WNDCLASSEX wc{};
     wc.style = CS_HREDRAW | CS_VREDRAW;
@@ -420,170 +450,170 @@ DWORD WINAPI InternalMain(HMODULE hModule)
     wc.hInstance = hInstance;
     wc.cbSize = sizeof(WNDCLASSEX);
     wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
-    wc.lpszClassName = "Cube2 External";
+    wc.lpszClassName = L"Cube2 External";
 
     RegisterClassEx(&wc);
 
-    HWND hWnd = CreateWindowEx(0, "Cube2 External", "Cube2 External", WS_VISIBLE | WS_EX_LAYERED | WS_BORDER,
+    HWND hWnd = CreateWindowEx(0, L"Cube2 External", L"Cube2 External", WS_VISIBLE | WS_EX_LAYERED | WS_BORDER,
                                CW_USEDEFAULT, CW_USEDEFAULT, 500, 700, 0, 0, hInstance, 0);
 
     if (hWnd == nullptr)
     {
         std::cerr << "Failed to create window" << std::endl;
         DWORD error = GetLastError();
-        std::cerr << "Error: " << error << std::endl;
+        std::cerr << "Error: L" << error << std::endl;
         return 1;
     }
 
     size_t yOffset = 0;
     size_t spacePeritem = 50;
 
-    CreateWindowEx(0, "Static", "Chainsaw:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd,
+    CreateWindowEx(0, L"Static", L"Chainsaw:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd,
                    nullptr, hInstance, 0);
 
-    CreateWindowEx(0, "Button", "Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
+    CreateWindowEx(0, L"Button", L"Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
                    15 + yOffset, 100, 30, hWnd, (HMENU)SELECT_CHAINSAW, hInstance, nullptr);
 
-    hEditChainsawAmmo = CreateWindowEx(0, "Edit", "Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
+    hEditChainsawAmmo = CreateWindowEx(0, L"Edit", L"Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
                                        25 + yOffset, 60, 20, hWnd, (HMENU)EDIT_CHAINSAW_AMMO, hInstance, nullptr);
 
     yOffset = 1;
     yOffset += spacePeritem;
-    CreateWindowEx(0, "Static", "Shotgun:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd, nullptr,
-                   hInstance, 0);
+    CreateWindowEx(0, L"Static", L"Shotgun:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd,
+                   nullptr, hInstance, 0);
 
-    CreateWindowEx(0, "Button", "Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
+    CreateWindowEx(0, L"Button", L"Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
                    15 + yOffset, 100, 30, hWnd, (HMENU)SELECT_SHOTGUN, hInstance, nullptr);
 
-    hEditShotgunAmmo = CreateWindowEx(0, "Edit", "Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
+    hEditShotgunAmmo = CreateWindowEx(0, L"Edit", L"Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
                                       25 + yOffset, 60, 20, hWnd, (HMENU)EDIT_SHOTGUN_AMMO, hInstance, nullptr);
 
     yOffset = 2;
     yOffset *= spacePeritem;
 
-    CreateWindowEx(0, "Static", "Machinegun:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd,
+    CreateWindowEx(0, L"Static", L"Machinegun:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd,
                    nullptr, hInstance, 0);
 
-    CreateWindowEx(0, "Button", "Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
+    CreateWindowEx(0, L"Button", L"Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
                    15 + yOffset, 100, 30, hWnd, (HMENU)SELECT_MACHINEGUN, hInstance, nullptr);
 
-    hEditMachinegunAmmo = CreateWindowEx(0, "Edit", "Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
+    hEditMachinegunAmmo = CreateWindowEx(0, L"Edit", L"Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
                                          25 + yOffset, 60, 20, hWnd, (HMENU)EDIT_MACHINEGUN_AMMO, hInstance, nullptr);
 
     yOffset = 3;
     yOffset *= spacePeritem;
 
-    CreateWindowEx(0, "Static", "Rocket Launcher:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd,
-                   nullptr, hInstance, 0);
+    CreateWindowEx(0, L"Static", L"Rocket Launcher:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45,
+                   hWnd, nullptr, hInstance, 0);
 
-    CreateWindowEx(0, "Button", "Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
+    CreateWindowEx(0, L"Button", L"Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
                    15 + yOffset, 100, 30, hWnd, (HMENU)SELECT_ROCKETLAUNCHER, hInstance, nullptr);
 
     hEditRocketlauncherAmmo =
-        CreateWindowEx(0, "Edit", "Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15, 25 + yOffset, 60, 20,
+        CreateWindowEx(0, L"Edit", L"Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15, 25 + yOffset, 60, 20,
                        hWnd, (HMENU)EDIT_ROCKETLAUNCHER_AMMO, hInstance, nullptr);
 
     yOffset = 4;
     yOffset *= spacePeritem;
 
-    CreateWindowEx(0, "Static", "Rifle:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd, nullptr,
+    CreateWindowEx(0, L"Static", L"Rifle:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd, nullptr,
                    hInstance, 0);
 
-    CreateWindowEx(0, "Button", "Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
+    CreateWindowEx(0, L"Button", L"Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
                    15 + yOffset, 100, 30, hWnd, (HMENU)SELECT_RIFLE, hInstance, nullptr);
 
-    hEditRifleAmmo = CreateWindowEx(0, "Edit", "Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15, 25 + yOffset,
-                                    60, 20, hWnd, (HMENU)EDIT_RIFLE_AMMO, hInstance, nullptr);
+    hEditRifleAmmo = CreateWindowEx(0, L"Edit", L"Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
+                                    25 + yOffset, 60, 20, hWnd, (HMENU)EDIT_RIFLE_AMMO, hInstance, nullptr);
 
     yOffset = 5;
     yOffset *= spacePeritem;
 
-    CreateWindowEx(0, "Static", "Grenade Launcher:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd,
-                   nullptr, hInstance, 0);
+    CreateWindowEx(0, L"Static", L"Grenade Launcher:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45,
+                   hWnd, nullptr, hInstance, 0);
 
-    CreateWindowEx(0, "Button", "Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
+    CreateWindowEx(0, L"Button", L"Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
                    15 + yOffset, 100, 30, hWnd, (HMENU)SELECT_GRENADELAUNCHER, hInstance, nullptr);
 
     hEditGrenadelauncherAmmo =
-        CreateWindowEx(0, "Edit", "Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15, 25 + yOffset, 60, 20,
+        CreateWindowEx(0, L"Edit", L"Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15, 25 + yOffset, 60, 20,
                        hWnd, (HMENU)EDIT_GRENADELAUNCHER_AMMO, hInstance, nullptr);
 
     yOffset = 6;
     yOffset *= spacePeritem;
 
-    CreateWindowEx(0, "Static", "Pistol:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd, nullptr,
-                   hInstance, 0);
+    CreateWindowEx(0, L"Static", L"Pistol:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd,
+                   nullptr, hInstance, 0);
 
-    CreateWindowEx(0, "Button", "Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
+    CreateWindowEx(0, L"Button", L"Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
                    15 + yOffset, 100, 30, hWnd, (HMENU)SELECT_PISTOL, hInstance, nullptr);
 
-    hEditPistolAmmo = CreateWindowEx(0, "Edit", "Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
+    hEditPistolAmmo = CreateWindowEx(0, L"Edit", L"Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
                                      25 + yOffset, 60, 20, hWnd, (HMENU)EDIT_PISTOL_AMMO, hInstance, nullptr);
 
     yOffset = 7;
     yOffset *= spacePeritem;
 
-    CreateWindowEx(0, "Static", "Fireball:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd,
+    CreateWindowEx(0, L"Static", L"Fireball:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd,
                    nullptr, hInstance, 0);
 
-    CreateWindowEx(0, "Button", "Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
+    CreateWindowEx(0, L"Button", L"Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
                    15 + yOffset, 100, 30, hWnd, (HMENU)SELECT_FIREBALL, hInstance, nullptr);
 
-    hEditFireballAmmo = CreateWindowEx(0, "Edit", "Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
+    hEditFireballAmmo = CreateWindowEx(0, L"Edit", L"Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
                                        25 + yOffset, 60, 20, hWnd, (HMENU)EDIT_FIREBALL_AMMO, hInstance, nullptr);
 
     yOffset = 8;
     yOffset *= spacePeritem;
 
-    CreateWindowEx(0, "Static", "Iceball:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd, nullptr,
-                   hInstance, 0);
+    CreateWindowEx(0, L"Static", L"Iceball:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd,
+                   nullptr, hInstance, 0);
 
-    CreateWindowEx(0, "Button", "Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
+    CreateWindowEx(0, L"Button", L"Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
                    15 + yOffset, 100, 30, hWnd, (HMENU)SELECT_ICEBALL, hInstance, nullptr);
 
-    hEditIceballAmmo = CreateWindowEx(0, "Edit", "Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
+    hEditIceballAmmo = CreateWindowEx(0, L"Edit", L"Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
                                       25 + yOffset, 60, 20, hWnd, (HMENU)EDIT_ICEBALL_AMMO, hInstance, nullptr);
 
     yOffset = 9;
     yOffset *= spacePeritem;
 
-    CreateWindowEx(0, "Static", "Laser:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd, nullptr,
+    CreateWindowEx(0, L"Static", L"Laser:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd, nullptr,
                    hInstance, 0);
 
-    CreateWindowEx(0, "Button", "Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
+    CreateWindowEx(0, L"Button", L"Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
                    15 + yOffset, 100, 30, hWnd, (HMENU)SELECT_LASER, hInstance, nullptr);
 
-    hEditLaserAmmo = CreateWindowEx(0, "Edit", "Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15, 25 + yOffset,
-                                    60, 20, hWnd, (HMENU)EDIT_LASER_AMMO, hInstance, nullptr);
+    hEditLaserAmmo = CreateWindowEx(0, L"Edit", L"Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
+                                    25 + yOffset, 60, 20, hWnd, (HMENU)EDIT_LASER_AMMO, hInstance, nullptr);
 
     yOffset = 10;
     yOffset *= spacePeritem;
 
-    CreateWindowEx(0, "Static", "Bite:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd, nullptr,
+    CreateWindowEx(0, L"Static", L"Bite:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd, nullptr,
                    hInstance, 0);
 
-    CreateWindowEx(0, "Button", "Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
+    CreateWindowEx(0, L"Button", L"Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
                    15 + yOffset, 100, 30, hWnd, (HMENU)SELECT_BITE, hInstance, nullptr);
 
-    hEditBiteAmmo = CreateWindowEx(0, "Edit", "Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15, 25 + yOffset,
-                                   60, 20, hWnd, (HMENU)EDIT_BITE_AMMO, hInstance, nullptr);
+    hEditBiteAmmo = CreateWindowEx(0, L"Edit", L"Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
+                                   25 + yOffset, 60, 20, hWnd, (HMENU)EDIT_BITE_AMMO, hInstance, nullptr);
 
     yOffset = 11;
     yOffset *= spacePeritem;
 
-    CreateWindowEx(0, "Static", "No Sound:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd,
+    CreateWindowEx(0, L"Static", L"No Sound:", WS_TABSTOP | WS_VISIBLE | WS_CHILD, 10, 5 + yOffset, 200, 45, hWnd,
                    nullptr, hInstance, 0);
 
-    CreateWindowEx(0, "Button", "Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
+    CreateWindowEx(0, L"Button", L"Select", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 100,
                    15 + yOffset, 100, 30, hWnd, (HMENU)SELECT_NOSOUND, hInstance, nullptr);
 
-    hEditNosoundAmmo = CreateWindowEx(0, "Edit", "Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
+    hEditNosoundAmmo = CreateWindowEx(0, L"Edit", L"Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER, 15,
                                       25 + yOffset, 60, 20, hWnd, (HMENU)EDIT_NOSOUND_AMMO, hInstance, nullptr);
 
     yOffset = 12;
     yOffset *= spacePeritem;
 
-    CreateWindowEx(0, "Button", "Update Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 220,
+    CreateWindowEx(0, L"Button", L"Update Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_FLAT, 220,
                    yOffset, 200, 50, hWnd, (HMENU)UPDATE, hInstance, nullptr);
 
     spacePeritem = 60;
@@ -591,34 +621,35 @@ DWORD WINAPI InternalMain(HMODULE hModule)
     yOffset = 0;
     yOffset *= spacePeritem;
 
-    hFreezeAmmoBtn = CreateWindowEx(0, "Button", "Freeze Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+    hFreezeAmmoBtn = CreateWindowEx(0, L"Button", L"Freeze Ammo", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
                                     200, 10 + yOffset, 250, 50, hWnd, (HMENU)FREEZE_AMMO, hInstance, nullptr);
 
     yOffset = 1;
     yOffset *= spacePeritem;
 
-    hGodModeBtn = CreateWindowEx(0, "Button", "Enable God Mode", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                                 200, 10 + yOffset, 250, 50, hWnd, (HMENU)GOD_MODE, hInstance, nullptr);
+    hGodModeBtn =
+        CreateWindowEx(0, L"Button", L"Enable God Mode", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON, 200,
+                       10 + yOffset, 250, 50, hWnd, (HMENU)GOD_MODE, hInstance, nullptr);
 
     yOffset = 2;
     yOffset *= spacePeritem;
 
     hRapidFireBtn =
-        CreateWindowEx(0, "Button", "Enable Rapid Fire", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON, 200,
+        CreateWindowEx(0, L"Button", L"Enable Rapid Fire", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON, 200,
                        10 + yOffset, 250, 50, hWnd, (HMENU)RAPID_FIRE, hInstance, nullptr);
 
     yOffset = 3;
     yOffset *= spacePeritem;
 
     hTriggerBotBtn =
-        CreateWindowEx(0, "Button", "Enable Trigger Bot", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON, 200,
+        CreateWindowEx(0, L"Button", L"Enable Trigger Bot", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON, 200,
                        10 + yOffset, 250, 50, hWnd, (HMENU)TRIGGER_BOT, hInstance, nullptr);
 
     yOffset = 4;
     yOffset *= spacePeritem;
 
     hNoRecoilBtn =
-        CreateWindowEx(0, "Button", "Enable No Recoil", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON, 200,
+        CreateWindowEx(0, L"Button", L"Enable No Recoil", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON, 200,
                        10 + yOffset, 250, 50, hWnd, (HMENU)NO_RECOIL, hInstance, nullptr);
 
     updateAmmoValues();
