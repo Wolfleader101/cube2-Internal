@@ -19,17 +19,13 @@ struct Vec3
     };
 };
 
+// Created with ReClass.NET 1.2 by KN4CK3R
+
 class Player
 {
   public:
-    // float posX;             // 0x0000
-    // float posZ;             // 0x0004
-    // float posY;             // 0x0008
-    // float velX;             // 0x000C
-    // float velZ;             // 0x0010
-    // float velY;             // 0x0014
-    Vec3 pos;
-    Vec3 vel;
+    Vec3 pos;               // 0x0000
+    Vec3 vel;               // 0x000C
     float forceForward;     // 0x0018
     float forceBack;        // 0x001C
     float forceUp;          // 0x0020
@@ -67,8 +63,11 @@ class Player
     int32_t N00000486;      // 0x01C8
     int32_t mass;           // 0x01CC
     int32_t c;              // 0x01D0
-    int8_t pad_01D4[40];    // 0x01D4
-    int8_t isShooting;      // 0x0FC
-};
-
+    char pad_01D4[40];      // 0x01D4
+    int8_t isShooting;      // 0x01FC
+    char pad_01FD[119];     // 0x01FD
+    char name[16];          // 0x0274
+    char pad_0284[244];     // 0x0284
+    char teamName[5];       // 0x0378
+};                          // Size: 0x037D
 typedef Player*(__cdecl* TraceLine_t)(Vec3* to, Vec3* from, Player* player, float& dist);
