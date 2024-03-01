@@ -24,8 +24,15 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     add_compile_options(/W4)
 endif()
 
+# add_definitions(-D_UNICODE -DUNICODE) # Use Unicode
 
 file(GLOB SRC src/*.cpp)
 include_directories(src/)
 
 add_library(${PROJECT_NAME} SHARED ${SRC})
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+    "$<TARGET_FILE:${PROJECT_NAME}>" "E:/hacks/sauerbraten/hack.dll"
+    COMMENT "Copying and renaming the DLL to hack.dll"
+)
