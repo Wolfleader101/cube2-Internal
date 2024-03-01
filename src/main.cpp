@@ -370,6 +370,7 @@ static void triggerBot()
 
             if (hitEnt)
             {
+                std::cout << "Hit: " << hitEnt->name << std::endl;
                 hitEnt->hp = 1;
                 player->isShooting = 1;
             }
@@ -386,7 +387,9 @@ BOOL _stdcall hwglSwapBuffers(HDC hDc)
 {
     std::cout << "Swap Buffers" << std::endl;
 
-    return ((twglSwapBuffers)espHook->GetGateway())(hDc);
+    BOOL retValue = ((twglSwapBuffers)espHook->GetGateway())(hDc);
+
+    return retValue;
 }
 
 DWORD WINAPI InternalMain(HMODULE hModule)
@@ -398,16 +401,17 @@ DWORD WINAPI InternalMain(HMODULE hModule)
 
     const char gameName[] = "sauerbraten.exe";
 
-    size_t playerOffset = 0x2A2560;
+    size_t playerOffset = 0x21E89C;
 
     uintptr_t moduleBase = GetModuleBaseAddress(gameName);
 
     player = *reinterpret_cast<Player**>(moduleBase + playerOffset);
 
-    TraceLine = reinterpret_cast<TraceLine_t>(moduleBase + 0x1DB2A0);
+    TraceLine = reinterpret_cast<TraceLine_t>(moduleBase + 0x1A2160);
 
-    worldpos = reinterpret_cast<Vec3*>(moduleBase + 0x32BEF8);
+    worldpos = reinterpret_cast<Vec3*>(moduleBase + 0x2A2C30);
 
+    std::cout << "Module Base: " << std::hex << moduleBase << std::endl;
     std::thread triggerBotThread(triggerBot);
 
     std::cout << "Module Base: " << std::hex << moduleBase << std::endl;
@@ -420,7 +424,7 @@ DWORD WINAPI InternalMain(HMODULE hModule)
     godMode = std::make_shared<NopInternal>((BYTE*)(moduleBase + 0x1DE446), 8);
 
     BYTE noRecoilByteCode[] = "\x0F\x57\xC0\x90\x90\x90\x90\x90";
-    noRecoilPatch = std::make_shared<ManagedPatch>((BYTE*)(moduleBase + 0x1DB73E), noRecoilByteCode, 8);
+    noRecoilPatch = std::make_shared<ManagedPatch>((BYTE*)(moduleBase + 0x1A251F), noRecoilByteCode, 8);
 
     HMODULE hOpenGL32 = GetModuleHandleA("opengl32.dll");
     if (!hOpenGL32)
@@ -438,18 +442,9 @@ DWORD WINAPI InternalMain(HMODULE hModule)
         return -1;
     }
 
-    espHook = std::make_shared<TrampHook>(wglSwapBuffersAddr, hwglSwapBuffers, 16);
+    espHook = std::make_shared<TrampHook>(wglSwapBuffersAddr, hwglSwapBuffers, 5);
 
     std::cout << "Made ESP Hook" << std::endl;
-
-    while (!GetAsyncKeyState(VK_END))
-    {
-        if (GetAsyncKeyState(VK_F2) & 1)
-        { // toggle Esp
-            espHook->IsEnabled() ? espHook->Disable() : espHook->Enable();
-        }
-        Sleep(50);
-    }
 
     HINSTANCE hInstance = GetModuleHandle(0);
     WNDCLASSEX wc{};
@@ -693,7 +688,6 @@ DWORD WINAPI InternalMain(HMODULE hModule)
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
-
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:

@@ -18,11 +18,11 @@
       }
     },
     {
-      "name": "clang-x64-debug",
-      "displayName": "Clang x64 Debug",
+      "name": "clang-x86-debug",
+      "displayName": "Clang x86 Debug",
       "inherits": "windows-clang-base",
       "architecture": {
-        "value": "x64",
+        "value": "x86",
         "strategy": "external"
       },
       "cacheVariables": {
@@ -30,9 +30,9 @@
       }
     },
     {
-      "name": "clang-x64-release",
-      "displayName": "Clang x64 Release",
-      "inherits": "clang-x64-debug",
+      "name": "clang-x86-release",
+      "displayName": "Clang x86 Release",
+      "inherits": "clang-x86-debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
@@ -65,26 +65,6 @@
       "name": "msvc-x86-release",
       "displayName": "MSVC x86 Release",
       "inherits": "msvc-x86-debug",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "msvc-x64-debug",
-      "displayName": "MSVC x64 Debug",
-      "inherits": "windows-msvc-base",
-      "architecture": {
-        "value": "x64",
-        "strategy": "external"
-      },
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
-    },
-    {
-      "name": "msvc-x64-release",
-      "displayName": "MSVC x64 Release",
-      "inherits": "msvc-x64-debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }

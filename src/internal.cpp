@@ -91,11 +91,11 @@ Hook::Hook(void* toHook, void* ourFunct, int len) : toHook(toHook), oldOpcodes(n
 
     memset(toHook, 0x90, len);
 
-    DWORD relativeAddress = ((DWORD)ourFunct - (DWORD)toHook) - 5;
+    uintptr_t relativeAddress = ((uintptr_t)ourFunct - (uintptr_t)toHook) - 5;
 
     *(BYTE*)toHook = 0xE9;
 
-    *(DWORD*)((DWORD)toHook + 1) = relativeAddress; // addres of where to jump too
+    *(uintptr_t*)((uintptr_t)toHook + 1) = relativeAddress; // addres of where to jump too
 
     VirtualProtect(toHook, len, curProtection, &curProtection);
 }
@@ -151,7 +151,7 @@ TrampHook::TrampHook(void* toHook, void* ourFunct, int len) : gateway(nullptr), 
     // add the address to the jmp
     *(uintptr_t*)((uintptr_t)gateway + len + 1) = jumpAddr;
 
-    managedHook = std::make_shared<Hook>(toHook, ourFunct, len);
+    managedHook = std::make_unique<Hook>(toHook, ourFunct, len);
 }
 
 TrampHook::~TrampHook()
