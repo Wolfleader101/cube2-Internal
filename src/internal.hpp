@@ -7,6 +7,11 @@
 #include <memory>
 #include <vector>
 
+inline uintptr_t GetModuleBaseAddress(const wchar_t* modName)
+{
+    return (uintptr_t)GetModuleHandle(modName);
+}
+
 inline uintptr_t GetModuleBaseAddress(const char* modName)
 {
     return (uintptr_t)GetModuleHandleA(modName);
@@ -63,4 +68,20 @@ class Hook
     std::unique_ptr<BYTE[]> oldOpcodes;
     int tLen;
     bool enabled;
+};
+
+class TrampHook
+{
+  public:
+    TrampHook(void* toHook, void* ourFunct, int len);
+    ~TrampHook();
+
+    void Enable();
+    void Disable();
+    bool IsEnabled();
+    void* GetTarget();
+
+  private:
+    void* gateway;
+    std::shared_ptr<Hook> managedHook;
 };

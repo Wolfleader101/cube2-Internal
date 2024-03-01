@@ -131,3 +131,53 @@ bool Hook::IsEnabled()
 {
     return enabled;
 }
+
+TrampHook::TrampHook(void* toHook, void* ourFunct, int len) : gateway(nullptr), managedHook(nullptr)
+{
+    if (len < 5)
+        return; // we need 5 bytes to make a jump
+
+    gateway = VirtualAlloc(NULL, len + 5, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+
+    // write the bytes that we are going to overwrite to the gateway
+    memcpy_s(gateway, len, toHook, len);
+
+    // get the gateway to destination address
+    uintptr_t jumpAddr = ((uintptr_t)toHook - (uintptr_t)gateway) - 5;
+
+    // add the jmp opcode to the end of the gateway
+    *(BYTE*)((uintptr_t)gateway + len) = 0xE9;
+
+    // add the address to the jmp
+    *(uintptr_t*)((uintptr_t)gateway + len + 1) = jumpAddr;
+
+    managedHook = std::make_shared<Hook>(toHook, ourFunct, len);
+}
+
+TrampHook::~TrampHook()
+{
+    if (gateway != nullptr)
+    {
+        VirtualFree(gateway, 0, MEM_RELEASE);
+    }
+}
+
+void TrampHook::Enable()
+{
+    managedHook->Enable();
+}
+
+void TrampHook::Disable()
+{
+    managedHook->Disable();
+}
+
+bool TrampHook::IsEnabled()
+{
+    return managedHook->IsEnabled();
+}
+
+void* TrampHook::GetTarget()
+{
+    return gateway;
+}
