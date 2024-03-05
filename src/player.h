@@ -2,23 +2,7 @@
 
 #include <cstdint>
 
-// Created with ReClass.NET 1.2 by KN4CK3R
-
-struct Vec3
-{
-    union {
-        struct
-        {
-            float x, y, z;
-        };
-        struct
-        {
-            float r, g, b;
-        };
-        float v[3];
-    };
-};
-
+#include "Math.hpp"
 // Created with ReClass.NET 1.2 by KN4CK3R
 
 class Player

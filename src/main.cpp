@@ -1,11 +1,14 @@
 #include <Windows.h>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <string>
 #include <thread>
 
 #include <tchar.h>
 
+#include "Math.hpp"
+#include "glDraw.hpp"
 #include "internal.hpp"
 #include "player.h"
 
@@ -50,11 +53,23 @@ static Player* player = nullptr;
 static TraceLine_t TraceLine = nullptr;
 static Vec3* worldpos = nullptr;
 
+static Player** entityList = nullptr;
+static int* entityCount = nullptr;
+
+static int tempSize = 0;
+
+static Vec2 screenPos;
+static Vec3 tmpWorldPos;
+static Vec3 playerPos;
+static float* viewMatrix;
+
 static std::shared_ptr<NopInternal> freezeAmmo = nullptr;
 static std::shared_ptr<NopInternal> godMode = nullptr;
 static std::shared_ptr<NopInternal> rapidFire = nullptr;
 static std::shared_ptr<ManagedPatch> noRecoilPatch = nullptr;
 static std::shared_ptr<TrampHook> espHook = nullptr;
+
+static std::map<int, HGLRC> contexts;
 
 static HWND hEditChainsawAmmo;
 static HWND hEditShotgunAmmo;
@@ -354,7 +369,7 @@ static bool triggerBotRunning = true;
 static void triggerBot()
 {
     Player* hitEnt = nullptr;
-    float distance = 0.0f;
+    float* distance{};
 
     while (triggerBotRunning)
     {
@@ -366,7 +381,20 @@ static void triggerBot()
                 continue;
             }
 
-            hitEnt = TraceLine(&player->pos, worldpos, player, distance);
+            Vec3 pos = player->pos;
+            Vec3* playerPos = &pos;
+
+            // hitEnt = TraceLine(playerPos, worldpos, player, distance);
+
+            __asm {
+            mov ecx, playerPos;
+            mov edx, worldpos
+            push player;
+            push distance;
+            call TraceLine;
+            add esp, 0x8;
+            mov [hitEnt], eax;
+            }
 
             if (hitEnt)
             {
@@ -385,7 +413,66 @@ static void triggerBot()
 
 BOOL _stdcall hwglSwapBuffers(HDC hDc)
 {
-    std::cout << "Swap Buffers" << std::endl;
+
+    int pixelformat = GetPixelFormat(hDc);
+
+    // save old context and create new context
+    HGLRC oldctx = wglGetCurrentContext();
+    HDC oldhdc = wglGetCurrentDC();
+
+    if (!contexts.count(pixelformat))
+    {
+        HGLRC myContext = wglCreateContext(hDc);
+        HGLRC gameContext = wglGetCurrentContext();
+        HDC old_dc = wglGetCurrentDC();
+        wglMakeCurrent(hDc, myContext);
+
+        wglMakeCurrent(old_dc, gameContext);
+        contexts[pixelformat] = myContext;
+    }
+
+    wglMakeCurrent(hDc, contexts[pixelformat]);
+
+    GL::SetupOrtho();
+
+    if (*entityCount == tempSize)
+    {
+        for (int i = 0; i < *entityCount; i++)
+        {
+            if (entityList[i] == player)
+                continue;
+
+            if (entityList[i]->hp <= 0)
+                continue;
+
+            tmpWorldPos = entityList[i]->pos;
+            playerPos = player->pos;
+
+            float distance = playerPos.distance(tmpWorldPos);
+
+            if (distance > 5.0f && GL::WorldToScreen(tmpWorldPos, screenPos, viewMatrix))
+            {
+                if (strcmp(entityList[i]->teamName, player->teamName) == 0)
+                {
+                    // same team
+                    GL::DrawEspBox(screenPos.x - 10, screenPos.y - 10, distance, rgb::green, entityList[i]->hp);
+                }
+                else
+                { // enemy team
+                    GL::DrawEspBox(screenPos.x - 10, screenPos.y - 10, distance, rgb::red, entityList[i]->hp);
+                }
+            }
+        }
+    }
+    else
+    {
+        tempSize = *entityCount;
+    }
+
+    GL::RestoreGL();
+
+    // restore to old context
+    wglMakeCurrent(oldhdc, oldctx);
 
     BOOL retValue = ((twglSwapBuffers)espHook->GetGateway())(hDc);
 
@@ -423,6 +510,10 @@ DWORD WINAPI InternalMain(HMODULE hModule)
     rapidFire = std::make_shared<NopInternal>((BYTE*)(moduleBase + 0x1DBA02), 7);
     godMode = std::make_shared<NopInternal>((BYTE*)(moduleBase + 0x1DE446), 8);
 
+    entityList = *reinterpret_cast<Player***>(moduleBase + 0x2B80F8);
+    entityCount = reinterpret_cast<int*>(moduleBase + 0x2B8100);
+    viewMatrix = reinterpret_cast<float*>(moduleBase + 0x2A2C44);
+
     BYTE noRecoilByteCode[] = "\x0F\x57\xC0\x90\x90\x90\x90\x90";
     noRecoilPatch = std::make_shared<ManagedPatch>((BYTE*)(moduleBase + 0x1A251F), noRecoilByteCode, 8);
 
@@ -434,7 +525,6 @@ DWORD WINAPI InternalMain(HMODULE hModule)
     }
 
     void* wglSwapBuffersAddr = GetProcAddress(hOpenGL32, "wglSwapBuffers");
-    std::cout << "wglSwapBuffers: L" << std::hex << wglSwapBuffersAddr << std::endl;
 
     if (!wglSwapBuffersAddr)
     {
@@ -445,6 +535,7 @@ DWORD WINAPI InternalMain(HMODULE hModule)
     espHook = std::make_shared<TrampHook>(wglSwapBuffersAddr, hwglSwapBuffers, 5);
 
     std::cout << "Made ESP Hook" << std::endl;
+    espHook->Enable();
 
     HINSTANCE hInstance = GetModuleHandle(0);
     WNDCLASSEX wc{};
