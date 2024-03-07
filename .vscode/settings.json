@@ -57,6 +57,8 @@
     "stop_token": "cpp",
     "thread": "cpp",
     "mutex": "cpp",
-    "xstddef": "cpp"
+    "xstddef": "cpp",
+    "map": "cpp",
+    "xtree": "cpp"
   }
 }

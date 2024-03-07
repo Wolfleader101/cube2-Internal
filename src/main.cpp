@@ -446,6 +446,8 @@ BOOL _stdcall hwglSwapBuffers(HDC hDc)
                 continue;
 
             tmpWorldPos = entityList[i]->pos;
+            tmpWorldPos.z -= 15.0f;
+
             playerPos = player->pos;
 
             float distance = playerPos.distance(tmpWorldPos);
@@ -503,7 +505,7 @@ DWORD WINAPI InternalMain(HMODULE hModule)
 
     std::cout << "Module Base: " << std::hex << moduleBase << std::endl;
     std::cout << "Player Offset: " << std::hex << playerOffset << std::endl;
-    std::cout << "Player Address: " << std::hex << player << std::endl;
+    std::cout << "Player Address: " << std::hex << player << std::dec << std::endl;
     std::cout << "Player name: " << player->name << std::endl;
 
     freezeAmmo = std::make_shared<NopInternal>((BYTE*)(moduleBase + 0x1DB5E0), 8);
@@ -512,7 +514,7 @@ DWORD WINAPI InternalMain(HMODULE hModule)
 
     entityList = *reinterpret_cast<Player***>(moduleBase + 0x2B80F8);
     entityCount = reinterpret_cast<int*>(moduleBase + 0x2B8100);
-    viewMatrix = reinterpret_cast<float*>(moduleBase + 0x2A2C44);
+    viewMatrix = reinterpret_cast<float*>(moduleBase + 0x2A3D70); // cam project view matrix
 
     BYTE noRecoilByteCode[] = "\x0F\x57\xC0\x90\x90\x90\x90\x90";
     noRecoilPatch = std::make_shared<ManagedPatch>((BYTE*)(moduleBase + 0x1A251F), noRecoilByteCode, 8);

@@ -1,23 +1,24 @@
 #include "glDraw.hpp"
+#include <iostream>
 
 namespace GL
 {
 
     void SetupOrtho()
     {
-        glPushAttrib(GL_ALL_ATTRIB_BITS);
-        glPushMatrix();
-        GLint viewport[4];
-
-        glGetIntegerv(GL_VIEWPORT, viewport);
-        glViewport(0, 0, viewport[2], viewport[3]);
+        glPushAttrib(GL_ALL_ATTRIB_BITS);           // backup attributes
+        glPushMatrix();                             // backup view matrix
+        GLint viewport[4];                          // screen dimentions
+        glGetIntegerv(GL_VIEWPORT, viewport);       // get the screen dimentions
+        glViewport(0, 0, viewport[2], viewport[3]); // set the screen size
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
 
+        // set up the orthographic mode:
         glOrtho(0, viewport[2], viewport[3], 0, -1, 1);
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
-        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_DEPTH_TEST); // disable depth testing
     }
 
     void RestoreGL()
@@ -26,39 +27,34 @@ namespace GL
         glPopAttrib();
     }
 
-    bool WorldToScreen(const Vec3& worldPos, Vec2& screenPos, const float viewMatrix[16])
+    bool WorldToScreen(const Vec3& pos, Vec2& screen, const float matrix[16])
     {
+        // get screen witdh and height
         GLint viewport[4];
         glGetIntegerv(GL_VIEWPORT, viewport);
-        int width = viewport[2];
-        int height = viewport[3];
+        int windowWidth = viewport[2];
+        int windowHeight = viewport[3];
 
+        // Matrix-vector Product, multiplying world(eye) coordinates by projection matrix = clipCoords
         Vec4 clipCoords;
+        clipCoords.x = pos.x * matrix[0] + pos.y * matrix[4] + pos.z * matrix[8] + matrix[12];
+        clipCoords.y = pos.x * matrix[1] + pos.y * matrix[5] + pos.z * matrix[9] + matrix[13];
+        clipCoords.z = pos.x * matrix[2] + pos.y * matrix[6] + pos.z * matrix[10] + matrix[14];
+        clipCoords.w = pos.x * matrix[3] + pos.y * matrix[7] + pos.z * matrix[11] + matrix[15];
 
-        clipCoords.x =
-            worldPos.x * viewMatrix[0] + worldPos.y * viewMatrix[4] + worldPos.z * viewMatrix[8] + viewMatrix[12];
-        clipCoords.y =
-            worldPos.x * viewMatrix[1] + worldPos.y * viewMatrix[5] + worldPos.z * viewMatrix[9] + viewMatrix[13];
-        clipCoords.z =
-            worldPos.x * viewMatrix[2] + worldPos.y * viewMatrix[6] + worldPos.z * viewMatrix[10] + viewMatrix[14];
-        clipCoords.w =
-            worldPos.x * viewMatrix[3] + worldPos.y * viewMatrix[7] + worldPos.z * viewMatrix[11] + viewMatrix[15];
-
-        // if the w is less than 0.1f, it's behind the camera
+        // if coordinates are not on screen
         if (clipCoords.w < 0.1f)
             return false;
 
-        // normalised device coords
-        Vec3 ndc;
+        // perspective division, dividing by clip.W = Normalized Device Coordinates
+        Vec3 NDC;
+        NDC.x = clipCoords.x / clipCoords.w;
+        NDC.y = clipCoords.y / clipCoords.w;
+        NDC.z = clipCoords.z / clipCoords.w;
 
-        ndc.x = clipCoords.x / clipCoords.w;
-        ndc.y = clipCoords.y / clipCoords.w;
-        ndc.z = clipCoords.z / clipCoords.w;
-
-        // convert to screen coords
-        screenPos.x = (width / 2 * ndc.x) + (ndc.x + width / 2);
-        screenPos.y = -(height / 2 * ndc.y) + (ndc.y + height / 2);
-
+        // Transform to window coordinates
+        screen.x = (windowWidth / 2 * NDC.x) + (windowWidth / 2);
+        screen.y = -(windowHeight / 2 * NDC.y) + (windowHeight / 2);
         return true;
     }
 
@@ -104,6 +100,10 @@ namespace GL
 
         float height = (viewport[3] / distance) * 10;
         float width = (viewport[2] / distance) * 4;
+
+        // snap lines
+        GL::DrawLine(viewport[2] / 2.0f, (float)viewport[3], posX, posY, lineWidth + 2.0f, rgb::black);
+        GL::DrawLine(viewport[2] / 2.0f, (float)viewport[3], posX, posY, lineWidth, color);
 
         // outline
         GL::DrawOutline(posX - (width / 2), posY - height, width, height, lineWidth + 2.0f, rgb::black);
