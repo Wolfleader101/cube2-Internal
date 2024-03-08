@@ -385,7 +385,7 @@ std::chrono::duration<float> deltaTime;
 std::chrono::time_point<std::chrono::steady_clock> lastTime;
 float lockTime = 0.0f;
 
-static Player* MyTraceLine(Vec3* from, Vec3* to, Player* player, float& distance)
+static Player* MyTraceLine(Vec3* from, Vec3* to, Player* player, float* distance)
 {
     Player* hitEnt = nullptr;
 
@@ -395,26 +395,28 @@ static Player* MyTraceLine(Vec3* from, Vec3* to, Player* player, float& distance
     Vec3 toCpy = *to;
     Vec3* toPos = &toCpy;
 
-    // The first 2 arguments get passed through registers
     __asm {
-		mov edx, toPos   
-		mov ecx, fromPos
+            mov ecx, fromPos;
+            mov edx, toPos;
+            push player;
+            push distance;
+            call TraceLine;
+            add esp, 0x8;
+            mov [hitEnt], eax;
     }
-
-    hitEnt = TraceLine(player, distance); // call the function
 
     return hitEnt;
 }
 
 static void AimBot()
 {
-    float distance{};
+    float* distance{};
 
     auto tmpTime = std::chrono::high_resolution_clock::now();
     deltaTime = tmpTime - lastTime;
     lastTime = tmpTime;
 
-    if (isAimbotEnabled)
+    if (isAimbotEnabled && GetAsyncKeyState(VK_RBUTTON))
     {
         if (*entityCount == tempSize)
         {
@@ -507,7 +509,7 @@ static void AimBot()
 
                     if (bestTarget == MyTraceLine(&player->headPos, worldpos, player, distance))
                     {
-                        // player->isShooting = true;
+                        player->isShooting = true;
 
                         // // press left click
                         // INPUT input;
@@ -522,13 +524,13 @@ static void AimBot()
                     }
                     else
                     {
-                        // player->isShooting = false;
+                        player->isShooting = false;
                     }
                 }
             }
             else
             {
-                // player->isShooting = false;
+                player->isShooting = false;
             }
         }
         else
@@ -538,7 +540,7 @@ static void AimBot()
     }
     else
     {
-        // player->isShooting = false;
+        player->isShooting = false;
         lockTime = 0.0f;
     }
 }
@@ -573,6 +575,8 @@ static void triggerBot()
 
             if (hitEnt)
             {
+
+                // hitEnt->hp = 1;
                 player->isShooting = 1;
             }
             else
