@@ -1,9 +1,13 @@
 #include <Windows.h>
+#include <chrono>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <string>
 #include <thread>
+
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 #include <tchar.h>
 
@@ -11,6 +15,8 @@
 #include "glDraw.hpp"
 #include "internal.hpp"
 #include "player.h"
+
+std::mutex hookMtx;
 
 typedef BOOL(__stdcall* twglSwapBuffers)(HDC hDc);
 
@@ -48,6 +54,7 @@ constexpr int EDIT_NOSOUND_AMMO = WM_APP + 127;
 
 constexpr int TRIGGER_BOT = WM_APP + 128;
 constexpr int NO_RECOIL = WM_APP + 129;
+constexpr int AIMBOT = WM_APP + 130;
 
 static Player* player = nullptr;
 static TraceLine_t TraceLine = nullptr;
@@ -89,6 +96,7 @@ static HWND hGodModeBtn;
 static HWND hRapidFireBtn;
 static HWND hTriggerBotBtn;
 static HWND hNoRecoilBtn;
+static HWND hAimbotBtn;
 
 static TCHAR buffer[16];
 
@@ -98,6 +106,7 @@ static bool isRapidFireEnabled = false;
 static bool isInitialized = false;
 static bool isTriggerBotEnabled = false;
 static bool isNoRecoilEnabled = false;
+static bool isAimbotEnabled = false;
 
 static void selectWeapon(int weapon)
 {
@@ -216,6 +225,10 @@ static LRESULT CALLBACK MessageHandler(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
                 noRecoilPatch->Enable();
             else
                 noRecoilPatch->Disable();
+            break;
+        case AIMBOT:
+            isAimbotEnabled = !isAimbotEnabled;
+            SetWindowText(hAimbotBtn, isAimbotEnabled ? L"Disable Aimbot" : L"Enable Aimbot");
             break;
         case UPDATE:
             updateAmmoValues();
@@ -365,6 +378,170 @@ static LRESULT CALLBACK MessageHandler(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
 }
 
 static bool triggerBotRunning = true;
+Player* bestTarget = nullptr;
+float bestDistance;
+
+std::chrono::duration<float> deltaTime;
+std::chrono::time_point<std::chrono::steady_clock> lastTime;
+float lockTime = 0.0f;
+
+static Player* MyTraceLine(Vec3* from, Vec3* to, Player* player, float& distance)
+{
+    Player* hitEnt = nullptr;
+
+    Vec3 fromCpy = *from;
+    Vec3* fromPos = &fromCpy;
+
+    Vec3 toCpy = *to;
+    Vec3* toPos = &toCpy;
+
+    // The first 2 arguments get passed through registers
+    __asm {
+		mov edx, toPos   
+		mov ecx, fromPos
+    }
+
+    hitEnt = TraceLine(player, distance); // call the function
+
+    return hitEnt;
+}
+
+static void AimBot()
+{
+    float distance{};
+
+    auto tmpTime = std::chrono::high_resolution_clock::now();
+    deltaTime = tmpTime - lastTime;
+    lastTime = tmpTime;
+
+    if (isAimbotEnabled)
+    {
+        if (*entityCount == tempSize)
+        {
+            if (bestTarget && bestTarget != MyTraceLine(&player->headPos, &bestTarget->pos, player, distance))
+            {
+                lockTime = 0.0f;
+            }
+
+            if (lockTime < 0.01f)
+            {
+                bestTarget = nullptr;
+
+                for (int i = 0; i < tempSize; ++i)
+                {
+                    if (entityList[i] == player)
+                        continue;
+
+                    if (!strcmp(entityList[i]->teamName, player->teamName))
+                        continue;
+
+                    Player* target = MyTraceLine(&player->headPos, &entityList[i]->pos, player, distance);
+                    bool seen = target && target == entityList[i];
+
+                    if (seen && GL::WorldToScreen(entityList[i]->pos, screenPos, viewMatrix))
+                    {
+                        GLint viewport[4];
+                        glGetIntegerv(GL_VIEWPORT, viewport);
+
+                        float centerY = viewport[3] / 2.0f;
+                        float centerX = viewport[2] / 2.0f;
+
+                        float distX = screenPos.x - centerX;
+                        float distY = screenPos.y - centerY;
+                        float tmpDistance = sqrtf((distX * distX) + (distY * distY));
+
+                        // if distance is far away
+                        if (tmpDistance > 300)
+                            continue;
+
+                        if (bestTarget)
+                        {
+                            if (tmpDistance < bestDistance)
+                            {
+                                bestTarget = entityList[i];
+                                bestDistance = tmpDistance;
+                            }
+                        }
+                        else
+                        {
+                            bestTarget = entityList[i];
+                            bestDistance = tmpDistance;
+                        }
+                    }
+                }
+                if (bestTarget)
+                {
+                    lockTime = 0.001f;
+                }
+            }
+            else
+            {
+                lockTime -= deltaTime.count();
+            }
+
+            if (bestTarget)
+            {
+                if (player->weaponCooldown < 1500)
+                {
+                    float rotX =
+                        asinf((bestTarget->pos.z - player->headPos.z) / player->headPos.distance(bestTarget->pos)) /
+                        (float)M_PI * 180.0f;
+                    float rotY = -atan2f(bestTarget->pos.x - player->headPos.x, bestTarget->pos.y - player->headPos.y) /
+                                 (float)M_PI * 180.0f;
+
+                    float diffX = fmodf(rotX - player->rotX, 180.0f); // get the shortest angle
+                    float diffY = fmodf(rotY - player->rotY, 180.0f); // get the shortest angle
+                    diffX = fmodf(2 * diffX, 180.0f) - diffX;
+                    diffY = fmodf(2 * diffY, 180.0f) - diffY;
+
+                    float aimSpeed = 20.0f;
+                    aimSpeed *= deltaTime.count();
+
+                    float percision = 0.2f;
+                    percision *= percision;
+
+                    if (diffX * diffX > percision)
+                        player->rotX += diffX * aimSpeed;
+                    if (diffY * diffY > percision)
+                        player->rotY += diffY * aimSpeed;
+
+                    if (bestTarget == MyTraceLine(&player->headPos, worldpos, player, distance))
+                    {
+                        // player->isShooting = true;
+
+                        // // press left click
+                        // INPUT input;
+                        // input.type = INPUT_MOUSE;
+                        // input.mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+                        // SendInput(1, &input, sizeof(INPUT));
+
+                        // Sleep(10);
+
+                        // input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
+                        // SendInput(1, &input, sizeof(INPUT));
+                    }
+                    else
+                    {
+                        // player->isShooting = false;
+                    }
+                }
+            }
+            else
+            {
+                // player->isShooting = false;
+            }
+        }
+        else
+        {
+            tempSize = *entityCount;
+        }
+    }
+    else
+    {
+        // player->isShooting = false;
+        lockTime = 0.0f;
+    }
+}
 
 static void triggerBot()
 {
@@ -381,10 +558,8 @@ static void triggerBot()
                 continue;
             }
 
-            Vec3 pos = player->pos;
+            Vec3 pos = player->headPos;
             Vec3* playerPos = &pos;
-
-            // hitEnt = TraceLine(playerPos, worldpos, player, distance);
 
             __asm {
             mov ecx, playerPos;
@@ -398,8 +573,6 @@ static void triggerBot()
 
             if (hitEnt)
             {
-                std::cout << "Hit: " << hitEnt->name << std::endl;
-                hitEnt->hp = 1;
                 player->isShooting = 1;
             }
             else
@@ -414,6 +587,7 @@ static void triggerBot()
 BOOL _stdcall hwglSwapBuffers(HDC hDc)
 {
 
+    hookMtx.lock();
     int pixelformat = GetPixelFormat(hDc);
 
     // save old context and create new context
@@ -448,7 +622,7 @@ BOOL _stdcall hwglSwapBuffers(HDC hDc)
             tmpWorldPos = entityList[i]->pos;
             tmpWorldPos.z -= 15.0f;
 
-            playerPos = player->pos;
+            playerPos = player->headPos;
 
             float distance = playerPos.distance(tmpWorldPos);
 
@@ -473,10 +647,14 @@ BOOL _stdcall hwglSwapBuffers(HDC hDc)
 
     GL::RestoreGL();
 
+    AimBot();
+
     // restore to old context
     wglMakeCurrent(oldhdc, oldctx);
 
     BOOL retValue = ((twglSwapBuffers)espHook->GetGateway())(hDc);
+
+    hookMtx.unlock();
 
     return retValue;
 }
@@ -747,6 +925,12 @@ DWORD WINAPI InternalMain(HMODULE hModule)
     hNoRecoilBtn =
         CreateWindowEx(0, L"Button", L"Enable No Recoil", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON, 200,
                        10 + yOffset, 250, 50, hWnd, (HMENU)NO_RECOIL, hInstance, nullptr);
+
+    yOffset = 5;
+    yOffset *= spacePeritem;
+
+    hAimbotBtn = CreateWindowEx(0, L"Button", L"Enable Aimbot", WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+                                200, 10 + yOffset, 250, 50, hWnd, (HMENU)AIMBOT, hInstance, nullptr);
 
     updateAmmoValues();
     MSG msg;

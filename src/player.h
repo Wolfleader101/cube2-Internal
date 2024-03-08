@@ -14,11 +14,9 @@ class Player
     float forceBack;        // 0x001C
     float forceUp;          // 0x0020
     int8_t pad_0024[12];    // 0x0024
-    float hPosX;            // 0x0030
-    float hPosZ;            // 0x0034
-    float hPosY;            // 0x0038
-    float lookSide;         // 0x003C
-    float lookUp;           // 0x0040
+    Vec3 headPos;           // 0x0030
+    float rotY;             // 0x003C
+    float rotX;             // 0x0040
     int8_t pad_0044[4];     // 0x0044
     float walkSpeed;        // 0x0048
     int8_t pad_004C[36];    // 0x004C
@@ -55,4 +53,5 @@ class Player
     char teamName[5];       // 0x034C
 };                          // Size: 0x0351
 
-typedef Player*(__cdecl* TraceLine_t)(Vec3* to, Vec3* from, Player* player, float& dist);
+// typedef Player*(__cdecl* TraceLine_t)(Vec3* from, Vec3* to, const Player* player, float& dist);
+typedef Player*(__cdecl* TraceLine_t)(const Player* player, float& dist);
