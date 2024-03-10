@@ -391,22 +391,6 @@ static Player* MyTraceLine(Vec3 to, Vec3 from, Player* plyer)
 
     Player* hitEnt = nullptr;
 
-    // Vec3 fromCpy = from;
-    // Vec3* fromPos = &fromCpy;
-
-    // Vec3 toCpy = *to;
-    // Vec3* toPos = &toCpy;
-
-    // __asm {
-    //         mov ecx, fromPos;
-    //         mov edx, toPos;
-    //         push plyer;
-    //         push dist;
-    //         call TraceLine;
-    //         add esp, 0x8;
-    //         mov [hitEnt], eax;
-    // }
-
     hitEnt = TraceLine(&to, &from, plyer, dist);
 
     return hitEnt;
@@ -442,8 +426,6 @@ static void AimBot()
                         continue;
 
                     Player* target = MyTraceLine(entityList[i]->pos, headPos, player);
-                    if (target)
-                        std::cout << "Target: " << target->name << std::endl;
 
                     bool seen = target && target == entityList[i];
 
@@ -555,12 +537,10 @@ static void triggerBot()
                 continue;
             }
 
-            hitEnt = MyTraceLine(*worldpos, player->headPos, player);
+            hitEnt = MyTraceLine(*worldpos, player->pos, player);
 
-            if (hitEnt)
+            if (hitEnt && hitEnt != player)
             {
-
-                // hitEnt->hp = 1;
                 player->isShooting = 1;
             }
             else
