@@ -385,42 +385,46 @@ std::chrono::duration<float> deltaTime;
 std::chrono::time_point<std::chrono::steady_clock> lastTime;
 float lockTime = 0.0f;
 
-static Player* MyTraceLine(Vec3* from, Vec3* to, Player* player, float* distance)
+static Player* MyTraceLine(Vec3 to, Vec3 from, Player* plyer)
 {
+    float dist = 0.0f;
+
     Player* hitEnt = nullptr;
 
-    Vec3 fromCpy = *from;
-    Vec3* fromPos = &fromCpy;
+    // Vec3 fromCpy = from;
+    // Vec3* fromPos = &fromCpy;
 
-    Vec3 toCpy = *to;
-    Vec3* toPos = &toCpy;
+    // Vec3 toCpy = *to;
+    // Vec3* toPos = &toCpy;
 
-    __asm {
-            mov ecx, fromPos;
-            mov edx, toPos;
-            push player;
-            push distance;
-            call TraceLine;
-            add esp, 0x8;
-            mov [hitEnt], eax;
-    }
+    // __asm {
+    //         mov ecx, fromPos;
+    //         mov edx, toPos;
+    //         push plyer;
+    //         push dist;
+    //         call TraceLine;
+    //         add esp, 0x8;
+    //         mov [hitEnt], eax;
+    // }
+
+    hitEnt = TraceLine(&to, &from, plyer, dist);
 
     return hitEnt;
 }
 
 static void AimBot()
 {
-    float* distance{};
-
     auto tmpTime = std::chrono::high_resolution_clock::now();
     deltaTime = tmpTime - lastTime;
     lastTime = tmpTime;
+
+    Vec3 headPos = player->headPos;
 
     if (isAimbotEnabled && GetAsyncKeyState(VK_RBUTTON))
     {
         if (*entityCount == tempSize)
         {
-            if (bestTarget && bestTarget != MyTraceLine(&player->headPos, &bestTarget->pos, player, distance))
+            if (bestTarget && bestTarget != MyTraceLine(bestTarget->pos, headPos, player))
             {
                 lockTime = 0.0f;
             }
@@ -437,7 +441,10 @@ static void AimBot()
                     if (!strcmp(entityList[i]->teamName, player->teamName))
                         continue;
 
-                    Player* target = MyTraceLine(&player->headPos, &entityList[i]->pos, player, distance);
+                    Player* target = MyTraceLine(entityList[i]->pos, headPos, player);
+                    if (target)
+                        std::cout << "Target: " << target->name << std::endl;
+
                     bool seen = target && target == entityList[i];
 
                     if (seen && GL::WorldToScreen(entityList[i]->pos, screenPos, viewMatrix))
@@ -507,20 +514,9 @@ static void AimBot()
                     if (diffY * diffY > percision)
                         player->rotY += diffY * aimSpeed;
 
-                    if (bestTarget == MyTraceLine(&player->headPos, worldpos, player, distance))
+                    if (bestTarget == MyTraceLine(*worldpos, headPos, player))
                     {
                         player->isShooting = true;
-
-                        // // press left click
-                        // INPUT input;
-                    // input.type = INPUT_MOUSE;
-                    // input.mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
-                    // SendInput(1, &input, sizeof(INPUT));
-
-                    // Sleep(10);
-
-                        // input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
-                        // SendInput(1, &input, sizeof(INPUT));
                     }
                     else
                     {
@@ -548,7 +544,6 @@ static void AimBot()
 static void triggerBot()
 {
     Player* hitEnt = nullptr;
-    float* distance{};
 
     while (triggerBotRunning)
     {
@@ -560,7 +555,7 @@ static void triggerBot()
                 continue;
             }
 
-            hitEnt = MyTraceLine(&player->headPos, worldpos, player, distance);
+            hitEnt = MyTraceLine(*worldpos, player->headPos, player);
 
             if (hitEnt)
             {
@@ -694,7 +689,7 @@ DWORD WINAPI InternalMain(HMODULE hModule)
     if (!hOpenGL32)
     {
         std::cerr << "Failed to get opengl32.dll" << std::endl;
-        return -1;
+        return 1ul;
     }
 
     void* wglSwapBuffersAddr = GetProcAddress(hOpenGL32, "wglSwapBuffers");
@@ -702,7 +697,7 @@ DWORD WINAPI InternalMain(HMODULE hModule)
     if (!wglSwapBuffersAddr)
     {
         std::cerr << "Failed to get wglSwapBuffers" << std::endl;
-        return -1;
+        return 1ul;
     }
 
     espHook = std::make_shared<TrampHook>(wglSwapBuffersAddr, hwglSwapBuffers, 5);

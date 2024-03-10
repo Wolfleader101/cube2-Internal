@@ -53,4 +53,4 @@ class Player
     char teamName[5];       // 0x034C
 };                          // Size: 0x0351
 
-typedef Player*(__cdecl* TraceLine_t)(Vec3* from, Vec3* to, const Player* player, float& dist);
+typedef Player*(__cdecl* TraceLine_t)(Vec3* from, Vec3* to, Player* player, float& dist);
