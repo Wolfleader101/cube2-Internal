@@ -513,11 +513,11 @@ static void AimBot()
 
                         // // press left click
                         // INPUT input;
-                        // input.type = INPUT_MOUSE;
-                        // input.mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
-                        // SendInput(1, &input, sizeof(INPUT));
+                    // input.type = INPUT_MOUSE;
+                    // input.mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+                    // SendInput(1, &input, sizeof(INPUT));
 
-                        // Sleep(10);
+                    // Sleep(10);
 
                         // input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
                         // SendInput(1, &input, sizeof(INPUT));
@@ -560,18 +560,7 @@ static void triggerBot()
                 continue;
             }
 
-            Vec3 pos = player->headPos;
-            Vec3* playerPos = &pos;
-
-            __asm {
-            mov ecx, playerPos;
-            mov edx, worldpos
-            push player;
-            push distance;
-            call TraceLine;
-            add esp, 0x8;
-            mov [hitEnt], eax;
-            }
+            hitEnt = MyTraceLine(&player->headPos, worldpos, player, distance);
 
             if (hitEnt)
             {
