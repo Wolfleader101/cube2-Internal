@@ -381,8 +381,6 @@ static bool triggerBotRunning = true;
 Player* bestTarget = nullptr;
 float bestDistance;
 
-std::chrono::duration<float> deltaTime;
-std::chrono::time_point<std::chrono::steady_clock> lastTime;
 float lockTime = 0.0f;
 
 static Player* MyTraceLine(Math::Vec3 to, Math::Vec3 from, Player* plyer)
@@ -398,14 +396,16 @@ static Player* MyTraceLine(Math::Vec3 to, Math::Vec3 from, Player* plyer)
 
 static void AimBot()
 {
-    auto tmpTime = std::chrono::high_resolution_clock::now();
-    deltaTime = tmpTime - lastTime;
-    lastTime = tmpTime;
-
+    static float maxDist = 300.f;
     Math::Vec3 headPos = player->headPos;
+
+    ImVec2 screenSize{ImGui::GetIO().DisplaySize};
+    Math::Vec2 center{screenSize.x / 2, screenSize.y / 2};
 
     if (isAimbotEnabled && GetAsyncKeyState(VK_RBUTTON))
     {
+        Renderer::Draw::Circle(center, maxDist, rgb::pink, 1.0f, true);
+
         if (*entityCount == tempSize)
         {
             if (bestTarget && bestTarget != MyTraceLine(bestTarget->pos, headPos, player))
@@ -429,7 +429,8 @@ static void AimBot()
 
                     bool seen = target && target == entityList[i];
 
-                    if (seen && GL::WorldToScreen(entityList[i]->pos, screenPos, viewMatrix))
+                    if (seen &&
+                        Renderer::WorldToScreen(entityList[i]->pos, screenPos, viewMatrix, screenSize.x, screenSize.y))
                     {
                         GLint viewport[4];
                         glGetIntegerv(GL_VIEWPORT, viewport);
@@ -442,7 +443,7 @@ static void AimBot()
                         float tmpDistance = sqrtf((distX * distX) + (distY * distY));
 
                         // if distance is far away
-                        if (tmpDistance > 300)
+                        if (tmpDistance > maxDist)
                             continue;
 
                         if (bestTarget)
@@ -467,7 +468,7 @@ static void AimBot()
             }
             else
             {
-                lockTime -= deltaTime.count();
+                lockTime -= Renderer::GetDeltaTimeSeconds();
             }
 
             if (bestTarget)
@@ -486,7 +487,7 @@ static void AimBot()
                     diffY = fmodf(2 * diffY, 180.0f) - diffY;
 
                     float aimSpeed = 20.0f;
-                    aimSpeed *= deltaTime.count();
+                    aimSpeed *= Renderer::GetDeltaTimeSeconds();
 
                     float percision = 0.2f;
                     percision *= percision;
@@ -518,6 +519,7 @@ static void AimBot()
     }
     else
     {
+        Renderer::Draw::Circle(center, maxDist, rgb::lightGray, 1.0f, true);
         player->isShooting = false;
         lockTime = 0.0f;
     }
@@ -552,10 +554,53 @@ static void triggerBot()
     }
 }
 
+static void ESP()
+{
+    ImVec2 screenSize{ImGui::GetIO().DisplaySize};
+
+    if (*entityCount == tempSize)
+    {
+        for (int i = 0; i < *entityCount; i++)
+        {
+            if (entityList[i] == player)
+                continue;
+
+            if (entityList[i]->hp <= 0)
+                continue;
+
+            tmpWorldPos = entityList[i]->pos;
+            tmpWorldPos.z -= 15.0f;
+
+            playerPos = player->headPos;
+
+            float distance = Math::Distance(playerPos, tmpWorldPos);
+
+            if (distance > 5.0f &&
+                Renderer::WorldToScreen(tmpWorldPos, screenPos, viewMatrix, screenSize.x, screenSize.y))
+            {
+                if (strcmp(entityList[i]->teamName, player->teamName) == 0)
+                {
+                    // same team
+                    Renderer::Draw::EspBox(screenPos, 10.0f, distance, rgb::green, entityList[i]->hp);
+                }
+                else
+                { // enemy team
+                    Renderer::Draw::EspBox(screenPos, 10.0f, distance, rgb::red, entityList[i]->hp);
+                }
+            }
+        }
+    }
+    else
+    {
+        tempSize = *entityCount;
+    }
+}
+
 BOOL _stdcall hwglSwapBuffers(HDC hDc)
 {
 
     hookMtx.lock();
+
     int pixelformat = GetPixelFormat(hDc);
 
     // save old context and create new context
@@ -575,47 +620,18 @@ BOOL _stdcall hwglSwapBuffers(HDC hDc)
 
     wglMakeCurrent(hDc, contexts[pixelformat]);
 
-    GL::SetupOrtho();
+    // START CODE HERE FOR SWAP BUFFER
+    Renderer::StartFrame();
 
-    if (*entityCount == tempSize)
-    {
-        for (int i = 0; i < *entityCount; i++)
-        {
-            if (entityList[i] == player)
-                continue;
+    Renderer::Draw::Start();
 
-            if (entityList[i]->hp <= 0)
-                continue;
-
-            tmpWorldPos = entityList[i]->pos;
-            tmpWorldPos.z -= 15.0f;
-
-            playerPos = player->headPos;
-
-            float distance = Math::Distance(playerPos, tmpWorldPos);
-
-            if (distance > 5.0f && GL::WorldToScreen(tmpWorldPos, screenPos, viewMatrix))
-            {
-                if (strcmp(entityList[i]->teamName, player->teamName) == 0)
-                {
-                    // same team
-                    GL::DrawEspBox(screenPos.x - 10, screenPos.y - 10, distance, rgb::green, entityList[i]->hp);
-                }
-                else
-                { // enemy team
-                    GL::DrawEspBox(screenPos.x - 10, screenPos.y - 10, distance, rgb::red, entityList[i]->hp);
-                }
-            }
-        }
-    }
-    else
-    {
-        tempSize = *entityCount;
-    }
-
-    GL::RestoreGL();
+    ESP();
 
     AimBot();
+
+    Renderer::Draw::End();
+
+    Renderer::EndFrame();
 
     // restore to old context
     wglMakeCurrent(oldhdc, oldctx);
@@ -664,6 +680,8 @@ DWORD WINAPI InternalMain(HMODULE hModule)
 
     BYTE noRecoilByteCode[] = "\x0F\x57\xC0\x90\x90\x90\x90\x90";
     noRecoilPatch = std::make_shared<ManagedPatch>((BYTE*)(moduleBase + 0x1A251F), noRecoilByteCode, 8);
+
+    Renderer::Setup(FindWindow(NULL, TEXT("Cube 2: Sauerbraten")));
 
     HMODULE hOpenGL32 = GetModuleHandleA("opengl32.dll");
     if (!hOpenGL32)

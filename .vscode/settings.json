@@ -69,6 +69,10 @@
     "ranges": "cpp",
     "span": "cpp",
     "stack": "cpp",
-    "xhash": "cpp"
+    "xhash": "cpp",
+    "chrono": "cpp",
+    "forward_list": "cpp",
+    "iomanip": "cpp",
+    "sstream": "cpp"
   }
 }
