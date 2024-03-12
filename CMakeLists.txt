@@ -7,7 +7,6 @@ project(${PROJECT_NAME})
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-
 # Compiler-specific flags
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR
     "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
@@ -26,10 +25,25 @@ endif()
 
 add_definitions(-D_UNICODE -DUNICODE) # Use Unicode
 
-file(GLOB SRC src/*.cpp)
-include_directories(src/)
 
-add_library(${PROJECT_NAME} SHARED ${SRC})
+add_subdirectory(src)
+
+add_library(${PROJECT_NAME} SHARED ${SOURCES})
+
+target_include_directories(${PROJECT_NAME} PRIVATE ${GLOBAL_INCLUDE_DIRS})
+
+add_subdirectory(libs)
+
+target_link_libraries(${PROJECT_NAME} PUBLIC
+    imgui
+    # spdlog
+    glm
+)
+
+# add_library(${PROJECT_NAME}SHARED SHARED src/dllmain.cpp)
+# target_include_directories(${PROJECT_NAME}SHARED PRIVATE ${GLOBAL_INCLUDE_DIRS})
+
+
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy

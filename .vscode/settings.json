@@ -59,6 +59,16 @@
     "mutex": "cpp",
     "xstddef": "cpp",
     "map": "cpp",
-    "xtree": "cpp"
+    "xtree": "cpp",
+    "array": "cpp",
+    "bitset": "cpp",
+    "deque": "cpp",
+    "list": "cpp",
+    "queue": "cpp",
+    "random": "cpp",
+    "ranges": "cpp",
+    "span": "cpp",
+    "stack": "cpp",
+    "xhash": "cpp"
   }
 }

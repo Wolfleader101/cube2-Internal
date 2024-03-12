@@ -3,7 +3,7 @@
 #include <Windows.h>
 #include <gl/GL.h>
 
-#include "Math.hpp"
+#include "Math/Math.hpp"
 
 namespace rgb
 {
@@ -45,7 +45,7 @@ namespace GL
 {
     void SetupOrtho();
     void RestoreGL();
-    bool WorldToScreen(const Vec3& worldPos, Vec2& screenPos, const float viewMatrix[16]);
+    bool WorldToScreen(const Math::Vec3& worldPos, Math::Vec2& screenPos, const float viewMatrix[16]);
 
     void DrawFilledRect(float x, float y, float width, float height, const GLubyte color[3]);
     void DrawOutline(float x, float y, float width, float height, float lineWidth, const GLubyte color[3]);

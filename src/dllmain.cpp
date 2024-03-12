@@ -11,10 +11,10 @@
 
 #include <tchar.h>
 
-#include "Math.hpp"
-#include "glDraw.hpp"
-#include "internal.hpp"
-#include "player.h"
+#include "Game/Player.h"
+#include "Internal/Internal.hpp"
+#include "Math/Math.hpp"
+#include "Renderer/Renderer.hpp"
 
 std::mutex hookMtx;
 
@@ -58,16 +58,16 @@ constexpr int AIMBOT = WM_APP + 130;
 
 static Player* player = nullptr;
 static TraceLine_t TraceLine = nullptr;
-static Vec3* worldpos = nullptr;
+static Math::Vec3* worldpos = nullptr;
 
 static Player** entityList = nullptr;
 static int* entityCount = nullptr;
 
 static int tempSize = 0;
 
-static Vec2 screenPos;
-static Vec3 tmpWorldPos;
-static Vec3 playerPos;
+static Math::Vec2 screenPos;
+static Math::Vec3 tmpWorldPos;
+static Math::Vec3 playerPos;
 static float* viewMatrix;
 
 static std::shared_ptr<NopInternal> freezeAmmo = nullptr;
@@ -385,7 +385,7 @@ std::chrono::duration<float> deltaTime;
 std::chrono::time_point<std::chrono::steady_clock> lastTime;
 float lockTime = 0.0f;
 
-static Player* MyTraceLine(Vec3 to, Vec3 from, Player* plyer)
+static Player* MyTraceLine(Math::Vec3 to, Math::Vec3 from, Player* plyer)
 {
     float dist = 0.0f;
 
@@ -402,7 +402,7 @@ static void AimBot()
     deltaTime = tmpTime - lastTime;
     lastTime = tmpTime;
 
-    Vec3 headPos = player->headPos;
+    Math::Vec3 headPos = player->headPos;
 
     if (isAimbotEnabled && GetAsyncKeyState(VK_RBUTTON))
     {
@@ -474,9 +474,9 @@ static void AimBot()
             {
                 if (player->weaponCooldown < 1500)
                 {
-                    float rotX =
-                        asinf((bestTarget->pos.z - player->headPos.z) / player->headPos.distance(bestTarget->pos)) /
-                        (float)M_PI * 180.0f;
+                    float rotX = asinf((bestTarget->pos.z - player->headPos.z) /
+                                       Math::Distance(player->headPos, bestTarget->pos)) /
+                                 (float)M_PI * 180.0f;
                     float rotY = -atan2f(bestTarget->pos.x - player->headPos.x, bestTarget->pos.y - player->headPos.y) /
                                  (float)M_PI * 180.0f;
 
@@ -592,7 +592,7 @@ BOOL _stdcall hwglSwapBuffers(HDC hDc)
 
             playerPos = player->headPos;
 
-            float distance = playerPos.distance(tmpWorldPos);
+            float distance = Math::Distance(playerPos, tmpWorldPos);
 
             if (distance > 5.0f && GL::WorldToScreen(tmpWorldPos, screenPos, viewMatrix))
             {
@@ -644,7 +644,7 @@ DWORD WINAPI InternalMain(HMODULE hModule)
 
     TraceLine = reinterpret_cast<TraceLine_t>(moduleBase + 0x1A2160);
 
-    worldpos = reinterpret_cast<Vec3*>(moduleBase + 0x2A2C30);
+    worldpos = reinterpret_cast<Math::Vec3*>(moduleBase + 0x2A2C30);
 
     std::cout << "Module Base: " << std::hex << moduleBase << std::endl;
     std::thread triggerBotThread(triggerBot);

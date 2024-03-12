@@ -2,19 +2,19 @@
 
 #include <cstdint>
 
-#include "Math.hpp"
-// Created with ReClass.NET 1.2 by KN4CK3R
+#include "Math/Math.hpp"
 
+// Created with ReClass.NET 1.2 by KN4CK3R
 class Player
 {
   public:
-    Vec3 pos;               // 0x0000
-    Vec3 vel;               // 0x000C
+    Math::Vec3 pos;         // 0x0000
+    Math::Vec3 vel;         // 0x000C
     float forceForward;     // 0x0018
     float forceBack;        // 0x001C
     float forceUp;          // 0x0020
     int8_t pad_0024[12];    // 0x0024
-    Vec3 headPos;           // 0x0030
+    Math::Vec3 headPos;     // 0x0030
     float rotY;             // 0x003C
     float rotX;             // 0x0040
     int8_t pad_0044[4];     // 0x0044
@@ -53,4 +53,4 @@ class Player
     char teamName[5];       // 0x034C
 };                          // Size: 0x0351
 
-typedef Player*(__cdecl* TraceLine_t)(Vec3* from, Vec3* to, Player* player, float& dist);
+typedef Player*(__cdecl* TraceLine_t)(Math::Vec3* from, Math::Vec3* to, Player* player, float& dist);

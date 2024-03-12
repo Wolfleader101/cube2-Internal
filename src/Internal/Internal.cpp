@@ -1,4 +1,4 @@
-#include "internal.hpp"
+#include "Internal/Internal.hpp"
 
 void PatchInternal(BYTE* dst, BYTE* src, size_t size)
 {

@@ -1,4 +1,5 @@
-#include "glDraw.hpp"
+#include "Renderer/Renderer.hpp"
+
 #include <iostream>
 
 namespace GL
@@ -27,7 +28,7 @@ namespace GL
         glPopAttrib();
     }
 
-    bool WorldToScreen(const Vec3& pos, Vec2& screen, const float matrix[16])
+    bool WorldToScreen(const Math::Vec3& pos, Math::Vec2& screen, const float matrix[16])
     {
         // get screen witdh and height
         GLint viewport[4];
@@ -36,7 +37,7 @@ namespace GL
         int windowHeight = viewport[3];
 
         // Matrix-vector Product, multiplying world(eye) coordinates by projection matrix = clipCoords
-        Vec4 clipCoords;
+        Math::Vec4 clipCoords;
         clipCoords.x = pos.x * matrix[0] + pos.y * matrix[4] + pos.z * matrix[8] + matrix[12];
         clipCoords.y = pos.x * matrix[1] + pos.y * matrix[5] + pos.z * matrix[9] + matrix[13];
         clipCoords.z = pos.x * matrix[2] + pos.y * matrix[6] + pos.z * matrix[10] + matrix[14];
@@ -47,7 +48,7 @@ namespace GL
             return false;
 
         // perspective division, dividing by clip.W = Normalized Device Coordinates
-        Vec3 NDC;
+        Math::Vec3 NDC;
         NDC.x = clipCoords.x / clipCoords.w;
         NDC.y = clipCoords.y / clipCoords.w;
         NDC.z = clipCoords.z / clipCoords.w;
